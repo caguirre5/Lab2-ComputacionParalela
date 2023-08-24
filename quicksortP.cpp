@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string>
 #include <ctime>
+#include <omp.h>
 
 #define FILE_RANDOM "numeros_aleatorios.csv"
 #define FILE_SORTED "numeros_ordenados.csv"
@@ -33,13 +34,14 @@ void par_qsort(int *data, int lo, int hi) {
         }
     }
     
+    #pragma omp task
     par_qsort(data, lo, h);
+    #pragma omp task
     par_qsort(data, l, hi);
 }
 
 int main(int argc, char *argv[]) {
     srand(time(0)); // Para obtener números aleatorios diferentes en cada ejecución.
-
 
     if (argc != 2) {
         cerr << "Uso: " << argv[0] << " <Numero de elementos aleatorios>" << endl;
@@ -56,15 +58,27 @@ int main(int argc, char *argv[]) {
     }
 
     cout << "Generando " << N << " números aleatorios." << endl;
+    unsigned int seed = time(0) + omp_get_thread_num(); // Obtener una semilla única para cada hilo
+    
+    #pragma omp parallel for
     for (int i = 0; i < N; i++) {
-        Array[i] = rand();
+        Array[i] = rand_r(&seed);
+    }
+
+    for (int i = 0; i < N; i++) {
         file_random << Array[i];
         if (i != N - 1) file_random << ","; // No agregamos una coma después del último número.
     }
+
     file_random.close();
 
     cout << "Clasificando los números." << endl;
-    par_qsort(Array, 0, N - 1);
+    #pragma omp parallel
+    {
+        #pragma omp single
+        par_qsort(Array, 0, N - 1);
+    }
+    
 
     ofstream file_sorted(FILE_SORTED);
     if(!file_sorted.is_open()) {
